@@ -11,8 +11,7 @@ foreach (var node in nodes)
     node.Start();
 }
 
-Console.WriteLine("Press any key to exit...");
-Console.ReadKey();
+Thread.Sleep(5000);
 
 foreach (var node in nodes)
 {
