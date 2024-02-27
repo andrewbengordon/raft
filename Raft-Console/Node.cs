@@ -3,24 +3,25 @@ namespace Raft_Console;
 public class Node
 {
     public Guid Id { get; }
-    private int term = 0;
+    private int _term = 0;
+
     public int Term
     {
-        get => term;
+        get => _term;
         set
         {
-            term = value;
+            _term = value;
             OnTermChanged?.Invoke(this, EventArgs.Empty);
         }
     }
-    private bool isLeader = false;
+    private bool _isLeader = false;
     public bool IsLeader
     {
-        get => isLeader;
+        get => _isLeader;
         private set
         {
-            isLeader = value;
-            OnLeadershipChanged?.Invoke(this, new LeadershipChangedEventArgs { IsLeader = isLeader });
+            _isLeader = value;
+            OnLeadershipChanged?.Invoke(this, new LeadershipChangedEventArgs { IsLeader = _isLeader });
         }
     }
     public bool IsHealthy { get; set; } = true;
@@ -29,7 +30,7 @@ public class Node
     private bool _running = true;
     private readonly Random _random = new();
     private readonly string _logFilePath;
-    private Dictionary<int, Guid> votedFor = new();
+    private readonly Dictionary<int, Guid> _votedFor = new();
 
     public event EventHandler? OnTermChanged;
     public event EventHandler<LeadershipChangedEventArgs>? OnLeadershipChanged;
@@ -56,7 +57,7 @@ public class Node
         _thread?.Join();
     }
 
-    private void RunElection()
+    public void RunElection()
     {
         while (_running)
         {
@@ -95,11 +96,11 @@ public class Node
         }
     }
 
-    public bool RequestVote(Guid candidateId, int term)
+    private bool RequestVote(Guid candidateId, int term)
     {
         if (!IsHealthy) return false;
 
-        if (votedFor.TryGetValue(term, out var votedCandidateId) && votedCandidateId != candidateId)
+        if (_votedFor.TryGetValue(term, out var votedCandidateId) && votedCandidateId != candidateId)
         {
             Log($"Already voted for another candidate in term {term}");
             return false;
@@ -108,7 +109,7 @@ public class Node
         var willVote = _random.Next(0, 2) == 0;
         if (willVote)
         {
-            votedFor[term] = candidateId;
+            _votedFor[term] = candidateId;
             Log($"Voted for {candidateId} in term {term}");
             return true;
         }
@@ -120,6 +121,22 @@ public class Node
     {
         var logMessage = $"{DateTime.UtcNow}: {message}\n";
         File.AppendAllText(_logFilePath, logMessage);
+    }
+    
+    public void VoteFor(Guid candidateId)
+    {
+        _votedFor[Term] = candidateId;
+    }
+    
+    public bool HasVotedFor(Func<Guid, bool> predicate)
+    {
+        return _votedFor.Any(kvp => predicate(kvp.Value));
+    }
+    
+    public void Reboot()
+    {
+        Term = 0;
+        IsLeader = false;
     }
 
     public class LeadershipChangedEventArgs : EventArgs

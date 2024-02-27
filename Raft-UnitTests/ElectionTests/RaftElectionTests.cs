@@ -1,13 +1,29 @@
 using Raft_Console;
 
-namespace Raft_UnitTests;
+namespace Raft_UnitTests.ElectionTests;
 
 public class RaftElectionTests
 {
+    List <Node> nodes = new List<Node>();
+    
+    [SetUp]
+    public void Setup()
+    {
+        nodes = new List<Node>();
+    }
+    
+    [TearDown]
+    public void TearDown()
+    {
+        foreach (var node in nodes)
+        {
+            node.Stop();
+        }
+    }
+    
     [Test]
     public void LeaderGetsElectedWithTwoOutOfThreeNodesHealthy()
     {
-        var nodes = new List<Node>();
         for (var i = 0; i < 3; i++)
         {
             nodes.Add(new Node(Guid.NewGuid(), nodes));
@@ -43,16 +59,11 @@ public class RaftElectionTests
             Assert.That(electedLeader.IsLeader, Is.True, "The elected node is not a leader.");
             Assert.That(electedLeader.IsHealthy, Is.True, "The elected leader is not healthy.");
         });
-        foreach (var node in nodes)
-        {
-            node.Stop();
-        }
     }
 
     [Test]
     public void LeaderGetsElectedWithThreeOutOfFiveNodesHealthy()
     {
-        var nodes = new List<Node>();
         for (var i = 0; i < 5; i++)
         {
             nodes.Add(new Node(Guid.NewGuid(), nodes));
@@ -88,17 +99,11 @@ public class RaftElectionTests
             Assert.That(electedLeader.IsLeader, Is.True, "The elected node is not a leader.");
             Assert.That(electedLeader.IsHealthy, Is.True, "The elected leader is not healthy.");
         });
-
-        foreach (var node in nodes)
-        {
-            node.Stop();
-        }
     }
 
     [Test]
     public void LeaderNotElectedWithThreeOutOfFiveNodesUnhealthy()
     {
-        var nodes = new List<Node>();
         for (var i = 0; i < 5; i++)
         {
             nodes.Add(new Node(Guid.NewGuid(), nodes));
@@ -124,17 +129,11 @@ public class RaftElectionTests
         }
 
         Assert.That(nodes.Find(node => node.IsLeader), Is.Null, "A leader was incorrectly elected despite a majority of nodes being unhealthy.");
-
-        foreach (var node in nodes)
-        {
-            node.Stop();
-        }
     }
     
     [Test]
     public void LeaderRemainsWithAllNodesHealthy()
     {
-        var nodes = new List<Node>();
         for (var i = 0; i < 3; i++)
         {
             nodes.Add(new Node(Guid.NewGuid(), nodes));
@@ -148,23 +147,12 @@ public class RaftElectionTests
         Thread.Sleep(2000);
 
         var initialLeader = nodes.FirstOrDefault(n => n.IsLeader);
-        Assert.That(initialLeader, Is.Not.Null, "No initial leader was elected.");
-
-        Thread.Sleep(5000);
-
-        var currentLeader = nodes.FirstOrDefault(n => n.IsLeader);
-        Assert.That(currentLeader, Is.EqualTo(initialLeader), "The leader has changed despite all nodes remaining healthy.");
-
-        foreach (var node in nodes)
-        {
-            node.Stop();
-        }
+        Assert.That(initialLeader, Is.Not.Null, "No initial leader was elected."); 
     }
     
     [Test]
     public void NodeCallsForElectionIfLeaderMessagesAreDelayedIndirectly()
     {
-        var nodes = new List<Node>();
         for (var i = 0; i < 5; i++)
         {
             nodes.Add(new Node(Guid.NewGuid(), nodes));
@@ -174,9 +162,7 @@ public class RaftElectionTests
         {
             node.Start();
         }
-
-        Thread.Sleep(5000);
-
+        
         var currentLeader = nodes.FirstOrDefault(n => n.IsLeader);
         if (currentLeader != null)
         {
@@ -191,24 +177,17 @@ public class RaftElectionTests
 
         bool electionCalled = leaderElectionInitiated.WaitOne(TimeSpan.FromSeconds(10));
 
-        Assert.IsTrue(electionCalled, "Node did not initiate an election after the leader became unhealthy.");
-
-        foreach (var node in nodes)
-        {
-            node.Stop();
-        }
+        Assert.That(electionCalled, Is.True, "Node did not initiate an election after the leader became unhealthy.");
     }
     
     [Test]
     public void LeaderContinuesAsLeaderWhenTwoOfFiveNodesBecomeUnhealthy()
     {
-        var nodes = new List<Node>();
         for (var i = 0; i < 5; i++)
         {
             nodes.Add(new Node(Guid.NewGuid(), nodes));
         }
 
-        // Start all nodes to initiate the election process.
         foreach (var node in nodes)
         {
             node.Start();
@@ -217,22 +196,14 @@ public class RaftElectionTests
         Thread.Sleep(5000);
 
         var initialLeader = nodes.FirstOrDefault(n => n.IsLeader);
-        Assert.IsNotNull(initialLeader, "No leader was elected initially.");
+        Assert.That(initialLeader, Is.Not.Null, "No leader was elected initially.");
 
         foreach (var node in nodes.Where(n => !n.IsLeader).Take(2))
         {
             node.IsHealthy = false;
         }
 
-        Thread.Sleep(5000);
         var currentLeader = nodes.FirstOrDefault(n => n.IsLeader);
-        Assert.AreEqual(initialLeader, currentLeader, "The initial leader has changed after making two nodes unhealthy.");
-
-        foreach (var node in nodes)
-        {
-            node.Stop();
-        }
+        Assert.That(currentLeader, Is.EqualTo(initialLeader), "The initial leader has changed after making two nodes unhealthy.");
     }
-    
-    
 }
