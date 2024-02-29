@@ -4,6 +4,8 @@ public class Node
 {
     public Guid Id { get; }
     private int _term = 0;
+    private Dictionary<int, (string value, int logIndex)> _log = new();
+    public static Node? CurrentLeader { get; private set; }
 
     public int Term
     {
@@ -137,6 +139,81 @@ public class Node
     {
         Term = 0;
         IsLeader = false;
+    }
+    
+    public void UpdateLeader(Node leader)
+    {
+        CurrentLeader = leader;
+    }
+    
+    public bool TryGetLogValue(int key, out (string value, int logIndex) logEntry)
+    {
+        if (_log.TryGetValue(key, out logEntry))
+        {
+            return true;
+        }
+        else
+        {
+            logEntry = ("", -1);
+            return false;
+        }
+    }
+    
+    public bool CompareVersionAndSwap(int key, string newValue, int expectedVersion, List<Node> nodes)
+    {
+        if (!IsLeader)
+        {
+            return false;
+        }
+
+        if (_log.TryGetValue(key, out var logEntry) && logEntry.logIndex == expectedVersion)
+        {
+            _log[key] = (newValue, logEntry.logIndex + 1);
+
+            var successfulReplications = 1;
+            foreach (var node in nodes.Where(n => n != this))
+            {
+                if (node.ReplicateLog(key, newValue, logEntry.logIndex + 1))
+                {
+                    successfulReplications++;
+                }
+            }
+
+            if (successfulReplications >= nodes.Count / 2)
+            {
+                return true;
+            }
+            else
+            {
+                _log[key] = (logEntry.value, logEntry.logIndex);
+                return false;
+            }
+        }
+
+        return false;
+    }
+    
+    private bool ReplicateLog(int key, string value, int logIndex)
+    {
+        if (!IsHealthy) return false;
+
+        if (_log.TryGetValue(key, out var logEntry) && logEntry.logIndex == logIndex - 1)
+        {
+            _log[key] = (value, logIndex);
+            return true;
+        }
+
+        return false;
+    }
+    
+    public void AddLogEntry(int key, string value)
+    {
+        _log[key] = (value, _log.Count);
+    }
+    
+    public bool CanReachConsensus()
+    {
+        return IsLeader;
     }
 
     public class LeadershipChangedEventArgs : EventArgs
